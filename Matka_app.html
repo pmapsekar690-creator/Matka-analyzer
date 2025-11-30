@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Matka Slip Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: linear-gradient(135deg, #1a2a6c, #2a5298);
+            min-height: 100vh;
+            padding: 15px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .header h1 {
+            color: #1e3c72;
+            font-size: 1.9em;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .ai-status {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+            text-align: center;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .learning-progress {
+            background: #e8f5e8;
+            padding: 18px;
+            border-radius: 15px;
+            margin: 15px 0;
+            border: 2px solid #4caf50;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.1);
+        }
+        
+        .progress-bar {
+            background: #ddd;
+            border-radius: 10px;
+            height: 12px;
+            margin: 12px 0;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .progress-fill {
+            background: linear-gradient(135deg, #4caf50, #45a049);
+            height: 100%;
+            width: 0%;
+            transition: width 0.8s ease;
+            border-radius: 10px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #1e3c72;
+            border-radius: 18px;
+            padding: 35px 25px;
+            text-align: center;
+            margin: 20px 0;
+            background: #f8f9ff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .upload-area.highlight {
+            background: #e8f4ff;
+            border-color: #2196F3;
+            transform: scale(1.02);
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .image-previews {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+            justify-content: center;
+        }
+        
+        .image-preview {
+            width: 85px;
+            height: 85px;
+            object-fit: cover;
+            border-radius: 12px;
+            border: 3px solid #ddd;
+            transition: transform 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .image-preview:hover {
+            transform: scale(1.05);
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            border: none;
+            padding: 18px;
+            width: 100%;
+            border-radius: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(30, 60, 114, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(30, 60, 114, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn.ai {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 25px;
+            display: none;
+            background: #f8f9fa;
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 2px solid #e9ecef;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1e3c72;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .results-section {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .stats {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            text-align: center;
+            border: 2px solid #2196F3;
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.1);
+        }
+        
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin: 20px 0;
+        }
+        
+        .number-card {
+            padding: 12px 6px;
+            text-align: center;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 12px;
+            background: white;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .number-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        
+        .number-card.zero { background: #f8f9fa; color: #6c757d; }
+        .number-card.low { background: #e3f2fd; border-color: #2196F3; }
+        .number-card.medium { background: #fff3e0; border-color: #ff9800; }
+        .number-card.high { background: #e8f5e8; border-color: #4caf50; }
+        .number-card.vip { background: #fce4ec; border-color: #e91e63; }
+        
+        .ai-insights {
+            background: #fff3e0;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 2px solid #ff9800;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.1);
+        }
+        
+        .ai-insights h4 {
+            color: #e65100;
+            margin-bottom: 15px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .insight-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: white;
+            border-radius: 10px;
+            border-left: 4px solid #ff9800;
+            transition: transform 0.2s ease;
+        }
+        
+        .insight-item:hover {
+            transform: translateX(5px);
+        }
+        
+        .confidence-meter {
+            display: flex;
+            align-items: center;
+            margin: 12px 0;
+            gap: 10px;
+        }
+        
+        .confidence-label {
+            width: 140px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        
+        .confidence-bar {
+            flex: 1;
+            background: #ddd;
+            height: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #4caf50, #45a049);
+            width: 0%;
+            transition: width 1s ease;
+            border-radius: 5px;
+        }
+        
+        .extracted-text {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 2px solid #4caf50;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.1);
+        }
+        
+        .text-content {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .manual-input-section {
+            background: #fff8e1;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 15px 0;
+            border: 2px solid #ffb300;
+        }
+        
+        .manual-input-section h4 {
+            color: #e65100;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .manual-textarea {
+            width: 100%;
+            height: 100px;
+            padding: 12px;
+            border: 2px solid #ffb300;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            margin-bottom: 10px;
+        }
+        
+        .quick-numbers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+            justify-content: center;
+        }
+        
+        .quick-number {
+            padding: 8px 12px;
+            background: #ffb300;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+        
+        .quick-number:hover {
+            background: #ff8f00;
+            transform: scale(1.1);
+        }
+        
+        .tabs {
+            display: flex;
+            margin: 15px 0;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 5px;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .tab.active {
+            background: #1e3c72;
+            color: white;
+            box-shadow: 0 2px 8px rgba(30, 60, 114, 0.3);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: #4caf50;
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transform: translateX(150%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification.error {
+            background: #f44336;
+        }
+        
+        .clear-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.1);
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="notification" id="notification">
+        <span id="notificationText">Operation completed successfully!</span>
+        <button class="clear-btn" onclick="hideNotification()">×</button>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🧠 AI Matka Slip Analyzer</h1>
+            <p>Self-learning intelligence that improves with every analysis</p>
+        </div>
+
+        <!-- AI Status -->
+        <div class="ai-status">
+            <span>🤖</span>
+            <span id="aiStatus">Learning Mode Active</span>
+        </div>
+
+        <!-- Learning Progress -->
+        <div class="learning-progress">
+            <strong>📈 AI Learning Progress</strong>
+            <div class="progress-bar">
+                <div class="progress-fill" id="learningProgress"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.85em;">
+                <div>Patterns Learned: <span id="patternsCount">0</span></div>
+                <div>Accuracy: <span id="accuracyRate">0%</span></div>
+                <div>Slips Analyzed: <span id="slipsAnalyzed">0</span></div>
+                <div>Confidence: <span id="confidenceLevel">0%</span></div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('upload')">📁 Upload</div>
+            <div class="tab" onclick="switchTab('manual')">⌨️ Manual Input</div>
+        </div>
+
+        <!-- Upload Tab -->
+        <div class="tab-content active" id="uploadTab">
+            <!-- Upload Section -->
+            <div class="upload-area" id="uploadArea">
+                <div style="font-size: 52px; margin-bottom: 15px;">📁</div>
+                <h3>Upload Handwritten Slip Photos</h3>
+                <p>Tap here or drag & drop images (max 5)</p>
+                <input type="file" id="fileInput" class="file-input" multiple accept="image/*">
+            </div>
+            
+            <div class="image-previews" id="imagePreviews"></div>
+        </div>
+
+        <!-- Manual Input Tab -->
+        <div class="tab-content" id="manualTab">
+            <div class="manual-input-section">
+                <h4>📝 Enter Slip Details Manually</h4>
+                <textarea class="manual-textarea" id="manualInput" placeholder="Enter slip content here...
+Example:
+10-100
+25-50
+37-200
+Or any other format with numbers"></textarea>
+                
+                <div class="quick-numbers">
+                    <button class="quick-number" onclick="addNumberToInput('10-100')">10-100</button>
+                    <button class="quick-number" onclick="addNumberToInput('25-50')">25-50</button>
+                    <button class="quick-number" onclick="addNumberToInput('37-200')">37-200</button>
+                    <button class="quick-number" onclick="addNumberToInput('59-150')">59-150</button>
+                    <button class="quick-number" onclick="addNumberToInput('68-75')">68-75</button>
+                </div>
+                
+                <button class="btn" onclick="analyzeManualInput()" style="background: linear-gradient(135deg, #ff9800, #f57c00);">
+                    🔍 Analyze Manual Input
+                </button>
+            </div>
+        </div>
+        
+        <button class="btn ai" id="analyzeBtn" disabled onclick="analyzeWithAI()">
+            🧠 AI Analyze & Learn
+        </button>
+        <button class="btn" onclick="resetApp()" style="background: #6c757d;">🔄 Reset</button>
+
+        <div class="loading" id="loadingSection">
+            <div class="spinner"></div>
+            <p id="progressText">Processing handwritten slips with AI OCR...</p>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+            <div class="extracted-text" id="extractedText">
+                <h4>📄 Text Extracted from Photos:</h4>
+                <div class="text-content" id="textContent"></div>
+            </div>
+            
+            <div class="stats" id="stats"></div>
+            
+            <h3 style="text-align: center; margin: 20px 0; color: #1e3c72;">Number Counts (00-99) - Low to High</h3>
+            <div class="analysis-grid" id="resultsGrid"></div>
+            
+            <!-- AI Insights -->
+            <div class="ai-insights" id="aiInsights">
+                <h4>🤖 AI Insights & Predictions</h4>
+                <div id="insightsList"></div>
+                
+                <div class="confidence-meter">
+                    <div class="confidence-label">Handwriting Recognition:</div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="handwritingConfidence"></div>
+                    </div>
+                </div>
+                
+                <div class="confidence-meter">
+                    <div class="confidence-label">Amount Detection:</div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="amountConfidence"></div>
+                    </div>
+                </div>
+                
+                <div class="confidence-meter">
+                    <div class="confidence-label">Pattern Analysis:</div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="patternConfidence"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // AI Learning Database
+        let aiBrain = {
+            patternsLearned: 0,
+            slipsAnalyzed: 0,
+            correctPredictions: 0,
+            patternMemory: {},
+            amountPatterns: {},
+            betTypePatterns: {},
+            userHabits: {},
+            handwritingPatterns: {},
+            learningLevel: 0,
+            confidence: {
+                handwriting: 0,
+                amount: 0,
+                pattern: 0
+            }
+        };
+
+        let selectedFiles = [];
+        let numberCounts = {};
+        
+        // Initialize from localStorage
+        function loadAIBrain() {
+            const saved = localStorage.getItem('matkaAIBrain');
+            if (saved) {
+                aiBrain = JSON.parse(saved);
+                updateLearningUI();
+            }
+        }
+        
+        // Save to localStorage
+        function saveAIBrain() {
+            localStorage.setItem('matkaAIBrain', JSON.stringify(aiBrain));
+        }
+        
+        function initializeCounts() {
+            numberCounts = {};
+            for (let i = 0; i < 100; i++) {
+                numberCounts[i.toString().padStart(2, '0')] = 0;
+            }
+        }
+        
+        // DOM Elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const loadingSection = document.getElementById('loadingSection');
+        const resultsSection = document.getElementById('resultsSection');
+        const imagePreviews = document.getElementById('imagePreviews');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const stats = document.getElementById('stats');
+        const textContent = document.getElementById('textContent');
+        const p
